@@ -4,7 +4,9 @@ import edu.ucr.cs.bdlab.beast.geolite.{Feature, IFeature}
 import org.apache.spark.SparkConf
 import org.apache.spark.beast.SparkSQLRegistration
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.functions.{arrays_zip, col, collect_list, explode}
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.functions._
 
 import scala.collection.Map
 
@@ -40,17 +42,38 @@ object BeastScala {
         .option("header", "true")
         .load(inputFile)
 
-      // used for validating Q1
-      tweetsDF.show()
-      tweetsDF.printSchema()
+      // used for validation
+      // tweetsDF.show()
+      // tweetsDF.printSchema()
 
       // Keep only the following attributes {id, text, entities.hashtags.txt, user.description, retweet_count, reply_count, and quoted_status_id}
-      // TODO: entities.hashtags is wrong
-      val convertedDF: DataFrame = tweetsDF.selectExpr("id", "text", "explode(entities.hashtags)", "user.description", "retweet_count", "reply_count", "quoted_status_id")
-      convertedDF.show()
-      convertedDF.printSchema()
+      val clean_tweets_df: DataFrame = tweetsDF.selectExpr("id", "text", "transform(entities.hashtags, x -> x.text) AS hashtags", "user.description AS user_description", "retweet_count", "reply_count", "quoted_status_id")
 
-      convertedDF.write.mode(SaveMode.Overwrite).json("tweets_clean")
+      // run a top-k SQL query to select the top 20 most frequent hashtags as follows.
+      clean_tweets_df.createOrReplaceTempView("clean_tweets")
+      val frequent_hashtags = sparkSession.sql(
+        """
+        SELECT hashtag, count(*) as count
+        FROM (
+          SELECT explode(hashtags) as hashtag
+          FROM clean_tweets
+        ) t
+        GROUP BY hashtag
+        ORDER BY count DESC
+        LIMIT 20
+      """)
+
+      val keywords: Array[String] = frequent_hashtags.select("hashtag").rdd.map(row => row.getString(0)).collect()
+
+      keywords.foreach(println)
+
+      //  used for validation
+      //  frequent_hashtags.show()
+      //  clean_tweets_df.show()
+      //  clean_tweets_df.printSchema()
+
+      // Store the output in a new JSON file named tweets_clean
+      clean_tweets_df.write.mode(SaveMode.Overwrite).json("tweets_clean")
 
       val t2 = System.nanoTime()
 
