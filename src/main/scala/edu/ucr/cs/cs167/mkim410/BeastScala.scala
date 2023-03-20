@@ -7,7 +7,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.{arrays_zip, col, collect_list, explode}
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.sql.functions._
-
+import scala.collection.mutable._
 import scala.collection.Map
 
 /**
@@ -78,6 +78,30 @@ object BeastScala {
       val t2 = System.nanoTime()
 
       println(s"Operations on file '$inputFile' took ${(t2 - t1) * 1E-9} seconds")
+
+      //end task 1
+      //TASK 2
+      val t3 = System.nanoTime()
+      //retrieve tweets topics
+      clean_tweets_df.createOrReplaceTempView("tweets_clean")
+      //convert keywords to an array separated with , so it can be used for array intersect in a query
+      val topics: String = "'"+ keywords.mkString("','") + "'"
+
+      //dataframe
+
+
+      val topics_df: DataFrame = sparkSession.sql(
+        s"""
+        SELECT id, text,element_at(t1.tweet_topic,1), user_description, retweet_count, reply_count, quoted_status_id
+        AS topic FROM ( SELECT *, array_intersect(hashtags, array($topics)) AS tweet_topic FROM tweets_clean) AS t1 WHERE size(tweet_topic) > 0;
+         """)
+
+
+      //write to json
+      topics_df.write.json("tweets_topic.json")
+      val t4 = System.nanoTime()
+
+      println(s"Operations on file '$inputFile' took ${(t4 - t3) * 1E-9} seconds")
     } finally {
       sparkSession.stop()
     }
