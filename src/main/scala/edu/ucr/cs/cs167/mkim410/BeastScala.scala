@@ -90,10 +90,10 @@ object BeastScala {
       //dataframe
 
 
-      val topics_df: DataFrame = sparkSession.sql(
+          val topics_df: DataFrame = sparkSession.sql(
         s"""
         SELECT id, text,element_at(t1.tweet_topic,1), user_description, retweet_count, reply_count, quoted_status_id
-        AS topic FROM ( SELECT *, array_intersect(hashtags, array($topics)) AS tweet_topic FROM tweets_clean) AS t1 WHERE size(tweet_topic) > 0;
+        FROM ( SELECT *, array_intersect(hashtags, array($topics)) AS tweet_topic FROM tweets_clean) AS t1 WHERE size(tweet_topic) > 0;
          """)
 
 
