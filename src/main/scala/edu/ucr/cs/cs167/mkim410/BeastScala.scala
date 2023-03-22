@@ -2,13 +2,19 @@ package edu.ucr.cs.cs167.mkim410
 
 import edu.ucr.cs.bdlab.beast.geolite.{Feature, IFeature}
 import org.apache.spark.SparkConf
+import org.apache.spark.ml.classification.{LogisticRegression, LogisticRegressionModel, MultilayerPerceptronClassifier}
+import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
+import org.apache.spark.ml.feature.{HashingTF, StringIndexer, Tokenizer}
+import org.apache.spark.ml.param.ParamMap
+import org.apache.spark.ml.tuning.{ParamGridBuilder, TrainValidationSplit, TrainValidationSplitModel}
+import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.beast.SparkSQLRegistration
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.functions.{arrays_zip, col, collect_list, explode}
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
+
 import scala.collection.mutable._
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 
 /**
  * Scala examples for Beast
@@ -92,14 +98,47 @@ object BeastScala {
 
       val topics_df: DataFrame = sparkSession.sql(
         s"""
-        SELECT id, text,element_at(t1.tweet_topic,1), user_description, retweet_count, reply_count, quoted_status_id
-        AS topic FROM ( SELECT *, array_intersect(hashtags, array($topics)) AS tweet_topic FROM tweets_clean) AS t1 WHERE size(tweet_topic) > 0;
-         """)
+              SELECT id, text,element_at(t1.tweet_topic,1), user_description, retweet_count, reply_count, quoted_status_id
+              FROM ( SELECT *, array_intersect(hashtags, array($topics)) AS tweet_topic FROM tweets_clean) AS t1 WHERE size(tweet_topic) > 0;
+               """)
 
 
       //write to json
       topics_df.write.json("tweets_topic.json")
+      topics_df.show()
       val t4 = System.nanoTime()
+
+      //END TASK 2
+      //BEGIN TASK 3
+
+      val tokenizer = new Tokenizer().setInputCol("text").setOutputCol("words")
+
+      val hashingTF = new HashingTF().setInputCol("words").setOutputCol("features")
+
+      val stringIndexer = new StringIndexer().setInputCol("element_at(tweet_topic, 1)").setOutputCol("label").setHandleInvalid("skip")
+
+      val logisticRegression = new LogisticRegression()
+
+      val pipeline = new Pipeline().setStages(Array(tokenizer, hashingTF, stringIndexer, logisticRegression))
+
+      val Array(trainingData, testData) = topics_df.randomSplit(Array(0.7, 0.3))
+
+      val logisticModel = pipeline.fit(trainingData)
+
+      val predictions = logisticModel.transform(testData)
+
+      predictions.select("id", "text", "element_at(tweet_topic, 1)", "user_description", "label", "prediction").show(10)
+
+      // Compute the number of true positives, false positives, and false negatives for each class
+      val tp = (0 to 10).map(c => predictions.filter(col("label") === c && col("prediction") === c).count()).sum
+      val fp = (0 to 10).map(c => predictions.filter(col("label") =!= c && col("prediction") === c).count()).sum
+      val fn = (0 to 10).map(c => predictions.filter(col("label") === c && col("prediction") =!= c).count()).sum
+
+      // Compute overall precision and recall
+      val overallPrecision = tp.toDouble / (tp + fp)
+      val overallRecall = tp.toDouble / (tp + fn)
+
+      println(s"Overall Precision: $overallPrecision, Overall Recall: $overallRecall")
 
       println(s"Operations on file '$inputFile' took ${(t4 - t3) * 1E-9} seconds")
     } finally {
