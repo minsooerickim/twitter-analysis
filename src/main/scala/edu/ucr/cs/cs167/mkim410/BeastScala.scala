@@ -105,7 +105,7 @@ object BeastScala {
 
       //write to json
       topics_df.write.json("tweets_topic.json")
-      topics_df.show()
+      // topics_df.show()
       val t4 = System.nanoTime()
 
       //END TASK 2
@@ -127,7 +127,8 @@ object BeastScala {
 
       val predictions = logisticModel.transform(testData)
 
-      predictions.select("id", "text", "element_at(tweet_topic, 1)", "user_description", "label", "prediction").show(10)
+      // predictions.select("id", "text", "element_at(tweet_topic, 1)", "user_description", "label", "prediction").show(10)
+      predictions.select("id", "text", "element_at(tweet_topic, 1)", "user_description", "label", "prediction")
 
       // Compute the number of true positives, false positives, and false negatives for each class
       val tp = (0 to 10).map(c => predictions.filter(col("label") === c && col("prediction") === c).count()).sum
