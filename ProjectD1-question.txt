@@ -1,4 +1,4 @@
 Which classifier did we use for our machine learning model?
+logistic regression classifier
 multi-layer perceptron classifier
-logistic regression
 decision tree classifier
